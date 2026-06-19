@@ -1,0 +1,26 @@
+# Interface
+streamlit
+gradio
+
+# LLM & Agents
+langchain
+langchain-groq
+langchain-community
+langchain-huggingface
+crewai
+
+# Embeddings & Vector Databases
+sentence-transformers==5.6.0
+faiss-cpu
+
+# LiteLLM (required by CrewAI for Groq/non-native LLM routing)
+litellm
+
+# Data Validation
+pydantic
+
+# Utilities
+python-dotenv
+pandas
+Pillow
+requests

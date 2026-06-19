@@ -1,0 +1,7 @@
+{
+  "name": "contact-center-customer-service-flowise",
+  "version": "1.0.0",
+  "scripts": {
+    "flowise": "flowise start --PORT=3002 --DATABASE_PATH=./flowise-data/database.sqlite --APIKEY_PATH=./flowise-data --SECRETKEY_PATH=./flowise-data --LOG_PATH=./flowise-data/logs --BLOB_STORAGE_PATH=./flowise-data/storage"
+  }
+}
