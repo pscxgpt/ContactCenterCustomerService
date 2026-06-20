@@ -1,0 +1,55 @@
+# ─── Secrets / environment ────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── Python virtual environments ──────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ─── Python bytecode / caches ─────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# ─── Large / raw data archives (keep the small source CSV tracked) ────
+*.zip
+
+# ─── n8n runtime data ─────────────────────────────────────────────────
+n8n-data/
+
+# ─── Node (Flowise / n8n tooling) ─────────────────────────────────────
+node_modules/
+npm-debug.log*
+
+# ─── Claude Code local config ─────────────────────────────────────────
+.claude/
+
+# ─── Streamlit secrets ────────────────────────────────────────────────
+.streamlit/secrets.toml
+
+# ─── Logs ─────────────────────────────────────────────────────────────
+*.log
+
+# ─── Editor / IDE ─────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*~
+
+# ─── OS cruft ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini

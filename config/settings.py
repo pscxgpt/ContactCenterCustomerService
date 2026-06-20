@@ -17,6 +17,12 @@ EMBEDDING_DIM = 384
 VECTOR_STORE_PATH = "knowledge_base/vector_store"
 RAW_DOCS_PATH = "knowledge_base/raw_docs"
 
+# Source FAQ dataset (Query,Response CSV)
+FAQ_CSV_PATH = os.path.join(RAW_DOCS_PATH, "archive (1)", "Dataset_Banking_chatbot.csv")
+
+# Retrieval
+RETRIEVAL_K = 3
+
 # Intents the router can classify
 INTENT_MORTGAGE = "hipotecas"
 INTENT_INCIDENT = "incidencias"
