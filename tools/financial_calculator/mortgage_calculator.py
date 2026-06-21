@@ -1,10 +1,9 @@
 """
-Deterministic mortgage financial calculator — no LLM math, pure Python.
-Exposed as a CrewAI tool so agents can call it safely.
+MortgageCalculatorTool — Cuota mensual, total devuelto e intereses.
 """
-import math
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
+from tools.financial_calculator._helpers import _calc_mortgage
 
 
 class MortgageInput(BaseModel):
@@ -22,20 +21,12 @@ class MortgageCalculatorTool(BaseTool):
     args_schema: type[BaseModel] = MortgageInput
 
     def _run(self, principal: float, annual_rate_pct: float, years: int) -> str:
-        monthly_rate = annual_rate_pct / 100 / 12
-        n = years * 12
-
-        if monthly_rate == 0:
-            monthly_payment = principal / n
-        else:
-            monthly_payment = principal * (monthly_rate * (1 + monthly_rate) ** n) / ((1 + monthly_rate) ** n - 1)
-
-        total_repayment = monthly_payment * n
-        total_interest = total_repayment - principal
-
+        monthly_payment, total_repayment, total_interest = _calc_mortgage(
+            principal, annual_rate_pct, years
+        )
         return (
-            f"Cuota mensual: {monthly_payment:.2f} €\n"
-            f"Total a devolver: {total_repayment:.2f} €\n"
-            f"Total intereses: {total_interest:.2f} €\n"
-            f"(Capital: {principal:.2f} €, TIN: {annual_rate_pct}%, Plazo: {years} años)"
+            f"Cuota mensual: {monthly_payment:,.2f} €\n"
+            f"Total a devolver: {total_repayment:,.2f} €\n"
+            f"Total intereses: {total_interest:,.2f} €\n"
+            f"(Capital: {principal:,.2f} €, TIN: {annual_rate_pct}%, Plazo: {years} años)"
         )
