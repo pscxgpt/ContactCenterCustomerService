@@ -27,3 +27,14 @@ RETRIEVAL_K = 3
 INTENT_MORTGAGE = "hipotecas"
 INTENT_INCIDENT = "incidencias"
 INTENT_UNKNOWN = "desconocido"
+
+# Mortgage defaults
+BASE_RATE_FIJO = 3.50       # TIN base tipo fijo (%)
+BASE_RATE_VARIABLE = 4.50   # Euríbor actual + spread (%)
+EURIBOR_ACTUAL = 3.50       # Euríbor a 12 meses (%)
+SPREAD_VARIABLE = 1.00      # Diferencial sobre Euríbor (pp)
+
+# CSV data paths
+CLIENTS_CSV = os.path.join(RAW_DOCS_PATH, "archive (1)", "bank_clients.csv")
+MORTGAGES_CSV = os.path.join(RAW_DOCS_PATH, "archive (1)", "active_mortgages.csv")
+PENDING_CASES_CSV = os.path.join(RAW_DOCS_PATH, "archive (1)", "pending_cases.csv")
