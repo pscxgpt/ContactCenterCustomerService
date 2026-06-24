@@ -15,7 +15,8 @@ def test_standard_mortgage(calc):
 
 def test_zero_interest(calc):
     result = calc._run(principal=12_000, annual_rate_pct=0.0, years=1)
-    assert "1000.00" in result
+    # output uses a thousands separator: 12.000 € / 12 = 1,000.00 €/mes
+    assert "1,000.00" in result
 
 
 def test_output_contains_all_fields(calc):

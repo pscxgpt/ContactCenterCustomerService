@@ -9,9 +9,9 @@ def _calc_mortgage(
     """Return (monthly_payment, total_repayment, total_interest)."""
     monthly_rate = annual_rate_pct / 100 / 12
     n = years * 12
+    if n == 0:
+        return 0.0, 0.0, 0.0
     if monthly_rate == 0:
-        if n == 0:
-            return 0,0,0
         monthly_payment = principal / n
     else:
         monthly_payment = principal * (monthly_rate * (1 + monthly_rate) ** n) / (
@@ -41,12 +41,7 @@ def _approximate_tae(
         factor = (1 + r) ** n
         f_val = principal * r * factor / (factor - 1) - monthly_payment
 
-        # f'(r) — derivative
-        df_num = principal * (
-            factor * (factor - 1) - r * n * (1 + r) ** (n - 1) * (factor - 1)
-            + r * factor * n * (1 + r) ** (n - 1)
-        )
-        # Simplified derivative:
+        # f'(r) — simplified derivative
         df_num = principal * (
             factor * (factor - 1)
             - r * n * (1 + r) ** (n - 1)

@@ -24,3 +24,7 @@ python-dotenv
 pandas
 Pillow
 requests
+truststore          # use the OS cert store for SSL (corporate networks)
+
+# Testing
+pytest

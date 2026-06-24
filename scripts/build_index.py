@@ -1,9 +1,10 @@
 """
-Builds (or rebuilds) the FAISS vector index from the banking FAQ dataset
-(a CSV with `Query` and `Response` columns).
+Builds (or rebuilds) the FAISS vector index from the banking knowledge base
+(a CSV with `Section`, `Question`, `Answer` columns).
 
-Each Q&A pair becomes one atomic document: the query and response are embedded
-together so the agent retrieves both the matching question and its answer.
+Each Q&A pair becomes one atomic document: the question and answer are embedded
+together so the agent retrieves both the matching question and its answer; the
+section is kept as metadata.
 
 Run:  python scripts/build_index.py
 """
@@ -23,28 +24,43 @@ from config.settings import EMBEDDING_MODEL, VECTOR_STORE_PATH, FAQ_CSV_PATH
 from tools.embeddings import get_embeddings
 
 
+def _read_csv(csv_path: str) -> pd.DataFrame:
+    """Read the CSV, tolerating UTF-8 or Windows-1252 encodings."""
+    for enc in ("utf-8", "cp1252", "latin-1"):
+        try:
+            return pd.read_csv(csv_path, encoding=enc)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError(f"Could not decode {csv_path} as UTF-8/cp1252/latin-1.")
+
+
 def load_faq_documents(csv_path: str) -> list[Document]:
-    df = pd.read_csv(csv_path, encoding="cp1252")
+    df = _read_csv(csv_path)
     df.columns = [c.strip() for c in df.columns]
 
-    expected = {"Query", "Response"}
+    expected = {"Question", "Answer"}
     if not expected.issubset(df.columns):
         raise ValueError(f"CSV must have columns {expected}, found {list(df.columns)}")
 
-    df = df.dropna(subset=["Query", "Response"])
-    df["Query"] = df["Query"].str.strip()
-    df["Response"] = df["Response"].str.strip()
-    df = df[(df["Query"] != "") & (df["Response"] != "")].drop_duplicates(subset=["Query"])
+    has_section = "Section" in df.columns
+    df = df.dropna(subset=["Question", "Answer"])
+    df["Question"] = df["Question"].str.strip()
+    df["Answer"] = df["Answer"].str.strip()
+    df = df[(df["Question"] != "") & (df["Answer"] != "")].drop_duplicates(subset=["Question"])
 
     docs = []
     for i, row in df.iterrows():
-        content = f"Pregunta: {row['Query']}\nRespuesta: {row['Response']}"
+        section = str(row["Section"]).strip() if has_section else ""
+        header = f"Sección: {section}\n" if section else ""
+        content = f"{header}Pregunta: {row['Question']}\nRespuesta: {row['Answer']}"
         docs.append(
             Document(
                 page_content=content,
                 metadata={
-                    "query": row["Query"],
-                    "response": row["Response"],
+                    # keep query/response keys for backward-compat with rag_search
+                    "query": row["Question"],
+                    "response": row["Answer"],
+                    "section": section,
                     "source": os.path.basename(csv_path),
                     "row": int(i),
                 },

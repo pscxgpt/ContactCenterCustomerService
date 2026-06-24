@@ -4,6 +4,7 @@ BonificationCalculatorTool — TAE final tras bonificaciones por productos vincu
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 from tools.financial_calculator._helpers import _calc_mortgage, _approximate_tae
+from config import settings as S
 
 
 class BonificationInput(BaseModel):
@@ -22,13 +23,7 @@ class BonificationInput(BaseModel):
         False, description="True if client will take out the bank's life insurance."
     )
     plan_pensiones: bool = Field(
-        False, description="True if client will open a pension plan with the bank."
-    )
-    uso_tarjetas: bool = Field(
-        False, description="True if client commits to using bank credit/debit cards regularly."
-    )
-    recibos_domiciliados: bool = Field(
-        False, description="True if client will domicile utility bills."
+        False, description="True if client will open a pension plan with the bank (≥ 600 €/year)."
     )
 
 
@@ -50,20 +45,16 @@ class BonificationCalculatorTool(BaseTool):
         seguro_hogar: bool = False,
         seguro_vida: bool = False,
         plan_pensiones: bool = False,
-        uso_tarjetas: bool = False,
-        recibos_domiciliados: bool = False,
     ) -> str:
-        # Define bonification discounts (in percentage points) — typical Spanish bank values
+        # Bonification discounts (pp) — spec §3.3, sourced from settings
         bonifications = []
         total_discount = 0.0
 
         products = [
-            (nomina_domiciliada, 0.50, "Nómina domiciliada (≥ 600 €/mes)"),
-            (seguro_hogar, 0.10, "Seguro de hogar"),
-            (seguro_vida, 0.20, "Seguro de vida"),
-            (plan_pensiones, 0.10, "Plan de pensiones"),
-            (uso_tarjetas, 0.10, "Uso de tarjetas bancarias"),
-            (recibos_domiciliados, 0.10, "Domiciliación de recibos"),
+            (nomina_domiciliada, S.BONIF_NOMINA, "Nómina domiciliada (≥ 1.200 €/mes)"),
+            (seguro_hogar, S.BONIF_SEGURO_HOGAR, "Seguro de hogar"),
+            (seguro_vida, S.BONIF_SEGURO_VIDA, "Seguro de vida"),
+            (plan_pensiones, S.BONIF_PLAN_PENSIONES, "Plan de pensiones (≥ 600 €/año)"),
         ]
 
         for active, discount, name in products:
@@ -71,8 +62,8 @@ class BonificationCalculatorTool(BaseTool):
                 bonifications.append((name, discount))
                 total_discount += discount
 
-        # Cap total discount (cannot result in negative rate)
-        final_rate_pct = max(base_annual_rate_pct - total_discount, 1.20)
+        # Apply the absolute TIN floor (spec §3.3)
+        final_rate_pct = max(base_annual_rate_pct - total_discount, S.TIN_FLOOR)
 
         # Calculate cuotas for base and bonified rates
         base_payment, base_total, base_interest = _calc_mortgage(principal, base_annual_rate_pct, years)
