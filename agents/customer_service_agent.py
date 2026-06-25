@@ -11,7 +11,11 @@ Spanish reply from the retrieved context. Concretely:
      (no LLM call), so we never improvise an answer the KB can't support.
   3. Otherwise the LLM answers **only** from the provided context, keeping the
      conversation history in mind; if the context doesn't actually cover the
-     question it says so and offers a human, instead of inventing.
+     question it transfers to a human instead of inventing.
+
+Style: this is a phone line, so replies are short and direct (call-style). The
+agent IS the customer-service line, so it never tells the caller to "phone
+customer service / a number" — it transfers to a human colleague instead.
 """
 from crewai import Agent, Task, Crew
 
@@ -24,15 +28,20 @@ from config.settings import CUSTOMER_SERVICE_MODEL, RETRIEVAL_K, RAG_MIN_RELEVAN
 patch_groq_cache()
 
 HUMAN_HANDOFF_MSG = (
-    "Lo siento, no encuentro información fiable sobre esto en nuestra base de "
-    "conocimiento. Te paso con un gestor humano que podrá ayudarte mejor. "
+    "Para esto te paso con un gestor que te lo resolverá enseguida. "
     "Un momento, por favor."
 )
 
 _BACKSTORY = """
-Eres un agente de atención al cliente de un banco español. Ayudas con
-incidencias y reclamaciones: tarjetas, transferencias, fraude, comisiones y
-cuentas. Respondes siempre en español, con tono claro y resolutivo.
+Eres un agente telefónico de atención al cliente de un banco español. Esta
+conversación ES la línea de atención al cliente: el cliente ya está hablando
+contigo, así que NUNCA le digas que llame a atención al cliente, a un número
+de teléfono ni a una línea de ayuda. Si no puedes resolver algo, le pasas con
+un gestor humano (un compañero), nunca con un número.
+
+Hablas como en una llamada: frases cortas, directas y cercanas. Vas al grano,
+sin listas largas, sin enumerar lo que sabes o no sabes, y sin despedidas
+largas.
 """.strip()
 
 
@@ -68,12 +77,15 @@ def answer_incident_query(user_message: str, conversation_history: str = "") -> 
 Información recuperada de la base de conocimiento (úsala como única fuente):
 {context}
 
-Instrucciones:
-- Responde en español, de forma breve y útil, resolviendo la incidencia.
+Instrucciones (estilo llamada telefónica):
+- Responde en español, MUY breve y directo: 1-2 frases, 3 como máximo.
 - Básate ÚNICAMENTE en la información recuperada. No inventes datos, cifras,
   plazos ni procedimientos que no aparezcan arriba.
-- Si la información recuperada no cubre realmente la consulta, dilo con
-  honestidad y ofrece pasar al cliente con un gestor humano.
+- NUNCA digas al cliente que llame a atención al cliente, a un número o a una
+  línea de ayuda: TÚ eres esa línea. Si la información recuperada no resuelve
+  realmente su consulta, dile en una sola frase que le pasas con un gestor que
+  lo resolverá (no des un número).
+- No enumeres lo que sabes o no sabes, ni añadas despedidas largas.
 - Ten en cuenta el historial para no repetir preguntas ya respondidas."""
 
     agent = Agent(
@@ -86,7 +98,7 @@ Instrucciones:
     task = Task(
         description=description,
         agent=agent,
-        expected_output="Una respuesta en español, fundamentada en el contexto, que resuelve o escala la incidencia.",
+        expected_output="Respuesta breve (1-3 frases), en español y estilo llamada, fundamentada en el contexto, que resuelve la incidencia o pasa al cliente con un gestor (nunca remite a llamar a un número).",
     )
     result = Crew(agents=[agent], tasks=[task], verbose=False).kickoff()
     return str(result)

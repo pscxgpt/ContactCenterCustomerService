@@ -1,6 +1,5 @@
 # Interface
 streamlit
-gradio
 
 # LLM & Agents
 langchain
@@ -12,6 +11,7 @@ crewai
 # Embeddings & Vector Databases
 sentence-transformers==5.6.0
 faiss-cpu
+numpy               # router Tier-1 semantic scoring (cosine matrix · query)
 
 # LiteLLM (required by CrewAI for Groq/non-native LLM routing)
 litellm

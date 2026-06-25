@@ -118,8 +118,11 @@ ContactCenterCustomerService/
 │   └── intents.py                   # Registro de intenciones (keywords + ejemplos)
 ├── tests/                           # Pruebas unitarias (58, deterministas)  ✅
 ├── main.py                          # CLI conversacional
-└── smoke_test.py                    # Verificación del entorno (Groq, embeddings, CrewAI)
+├── smoke_test.py                    # Verificación del entorno (Groq, embeddings, CrewAI)
+└── DEMO_RUNBOOK.md                  # Guion de la demo (escenas + frases verificadas)  ✅
 ```
+
+> 🎬 **Para la defensa en directo**, sigue [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md): checklist previo, escenas guionizadas (hipoteca / incidencia / handoff / fuera de alcance), mensajes clave y plan B. Todas las frases están verificadas contra el sistema actual.
 
 ---
 
@@ -187,7 +190,7 @@ pip install -r requirements.txt
   - Núcleo determinista (`mortgage_core.py`): LTV, TIN final (base − bonificaciones + ajuste LTV, suelo 1,20%), cuota, ratio de esfuerzo `(cuota+deudas)/ingresos`, estabilidad laboral, historial, test de estrés, *rating* A/B/C/D con **regla de oro**, y rentabilidad.
   - Motor de asesoría Fase 1→3 (`advisory.py`): árbol de decisión, **motor de recomendaciones** (Modificar/Contratar/Eliminar), **escalado a gestor humano** (§7) y mensaje al cliente **§8-safe** (no revela rating/fórmulas).
   - Agente conversacional multi-turno que recoge datos y llama a `EvaluarHipotecaTool` (los cálculos y la decisión los hace el código, no el LLM; `temperature=0`).
-- **Agente de Atención al Cliente — flujo de incidencias completo** (`customer_service_agent.py`): mismo patrón *Mind + Tools* que hipotecas — la recuperación y la **decisión de escalado son deterministas**, el LLM solo redacta. (1) `retrieve()` devuelve los mejores resultados con *score* de relevancia; (2) si el mejor está por debajo de `RAG_MIN_RELEVANCE` (0,12, calibrado) → **escalado a humano** verbatim, sin improvisar; (3) si pasa el filtro, el LLM responde **solo** desde el contexto recuperado y con **memoria conversacional**, y admite no saber en vez de inventar. Verificado en vivo (respuesta fundamentada / memoria / handoff).
+- **Agente de Atención al Cliente — flujo de incidencias completo** (`customer_service_agent.py`): mismo patrón *Mind + Tools* que hipotecas — la recuperación y la **decisión de escalado son deterministas**, el LLM solo redacta. (1) `retrieve()` devuelve los mejores resultados con *score* de relevancia; (2) si el mejor está por debajo de `RAG_MIN_RELEVANCE` (0,12, calibrado) → **escalado a humano** verbatim, sin improvisar; (3) si pasa el filtro, el LLM responde **solo** desde el contexto recuperado y con **memoria conversacional**, y admite no saber en vez de inventar. **Estilo de llamada:** respuestas breves y directas; el agente **es** la línea de atención, así que nunca remite a "llamar a atención al cliente / a un número" — si no puede resolver, **pasa con un gestor**. Verificado en vivo (respuesta fundamentada / memoria / handoff / concisión).
 - **Pipeline RAG completo**: ingesta → índice FAISS → búsqueda con relevancia coseno. Dataset actual: `banking_knowledge_base_1000.csv` (989 Q&A en 10 secciones).
 - **`RAGSearchTool`** con embeddings centralizados (`tools/embeddings.py`) para no divergir entre indexado y consulta.
 - **UIs Streamlit**: `app.py` (chat multiagente por **voz + texto** con enrutador, sesión sticky y chip de nivel), `rag_explorer.py` (verifica el RAG sin LLM) y `mortgage_chat.py` (chat de hipotecas); booteadas con `AppTest`.
