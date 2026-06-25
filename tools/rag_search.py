@@ -16,7 +16,16 @@ from tools.embeddings import get_embeddings
 
 @lru_cache(maxsize=1)
 def _load_store() -> FAISS:
-    """Load the FAISS store once and cache it (embeddings model is heavy)."""
+    """Load the FAISS store once and cache it (the embeddings model is heavy).
+
+    If the index isn't present, build it from the source CSV first. This lets a
+    deploy ship only the dataset (text) and construct the vector store on first
+    use — e.g. Hugging Face Spaces rejects committed binary indexes, so there the
+    index is built at runtime instead of being versioned.
+    """
+    if not os.path.exists(VECTOR_STORE_PATH):
+        from scripts.build_index import build
+        build()
     return FAISS.load_local(VECTOR_STORE_PATH, get_embeddings(), allow_dangerous_deserialization=True)
 
 
@@ -30,9 +39,7 @@ class RAGHit:
 def retrieve(query: str, k: int = RETRIEVAL_K) -> list[RAGHit]:
     """Structured retrieval primitive — returns scored hits (best first) so the
     caller can make a deterministic relevance decision (e.g. handoff gate)."""
-    if not os.path.exists(VECTOR_STORE_PATH):
-        return []
-    store = _load_store()
+    store = _load_store()  # builds the index on first use if it isn't present
     # Cosine relevance over normalized embeddings can be negative for unrelated
     # queries (that's exactly our off-topic signal); LangChain warns because it
     # expects [0, 1]. The ordering is still valid, so silence the noisy warning.
@@ -63,9 +70,6 @@ class RAGSearchTool(BaseTool):
     args_schema: type[BaseModel] = RAGSearchInput
 
     def _run(self, query: str, k: int = RETRIEVAL_K) -> str:
-        if not os.path.exists(VECTOR_STORE_PATH):
-            return "Knowledge base not found. Please run scripts/build_index.py first."
-
         hits = retrieve(query, k=k)
         if not hits:
             return "No relevant information found in the knowledge base."
