@@ -74,7 +74,7 @@ Cada decisión devuelve un `RouteDecision` estructurado (`route_to`, `tier`, `co
 **Para un escenario real de call center:**
 - **Sesión persistente (sticky):** una vez derivado a hipotecas, una repregunta ("¿y a 25 años?") **se queda** con el mismo agente; solo se reenruta si el cliente cambia de tema con confianza o pide un humano.
 - **Aclaración y escalado a humano** como rutas de primera clase (baja confianza, tema sensible, petición explícita).
-- **Escala por configuración:** añadir una intención = añadir una entrada en `config/intents.py` (sin reentrenar ni reescribir prompts).
+- **Escala por configuración:** añadir una intención = añadir una entrada en [`config/intents.py`](config/intents.py) (sin reentrenar ni reescribir prompts).
 - **Camino de producción:** clasificador pequeño *fine-tuned* + observabilidad (logging de cada decisión, evaluación contra un set etiquetado, minería de errores de enrutado), servido con un modelo local (vLLM/TGI) y *session store* (Redis) para workers sin estado.
 
 > 🌐 El enrutador (y el RAG) usan un **modelo de embeddings multilingüe** (`paraphrase-multilingual-MiniLM-L12-v2`, 384-dim). En español, las consultas dentro de alcance puntúan ~0.55-0.90 y las de fuera ~0.1-0.3, así que Tier 1 separa con fiabilidad y solo lo dudoso escala al LLM. Además habilita recuperación RAG **consulta en español → base de conocimiento en inglés**.
@@ -83,7 +83,7 @@ Cada decisión devuelve un `RouteDecision` estructurado (`route_to`, `tier`, `co
 
 ## 🎙️ Voz (canal de contact center)
 
-El sistema es **conversacional por voz**: el cliente habla, el agente responde con voz, igual que en una llamada real — pero toda la inteligencia es la misma que en texto. La voz es una **capa fina e intercambiable** alrededor de los agentes (`tools/voice.py`); el enrutador y los agentes no saben cómo entra ni sale el audio.
+El sistema es **conversacional por voz**: el cliente habla, el agente responde con voz, igual que en una llamada real — pero toda la inteligencia es la misma que en texto. La voz es una **capa fina e intercambiable** alrededor de los agentes ([`tools/voice.py`](tools/voice.py)); el enrutador y los agentes no saben cómo entra ni sale el audio.
 
 ```text
 🎙️ grabar ─► STT (Groq Whisper) ─► route_turn() ─► agente ─► texto ─► TTS (edge-tts) ─► 🔊
@@ -94,8 +94,8 @@ El sistema es **conversacional por voz**: el cliente habla, el agente responde c
 | **STT** (voz → texto) | Groq Whisper (`whisper-large-v3-turbo`), reutiliza `GROQ_API_KEY` | `faster-whisper` (offline) |
 | **TTS** (texto → voz) | edge-tts, voz neuronal `es-ES-AlvaroNeural` | Piper (open-source, offline) |
 
-- En `ui/app.py` cada turno entra por **voz** (botón 🎙️ `st.audio_input`) o por **texto**; la respuesta hablada se reproduce automáticamente y hay un *toggle* en la barra lateral para activar/desactivar la voz.
-- El reemplazo a modelos locales toca **solo `tools/voice.py`** (mismo patrón que el LLM). La verificación en directo de ambos tramos está en `scripts/voice_smoke.py` (TTS → STT round-trip).
+- En [`ui/app.py`](ui/app.py) cada turno entra por **voz** (botón 🎙️ `st.audio_input`) o por **texto**; la respuesta hablada se reproduce automáticamente y hay un *toggle* en la barra lateral para activar/desactivar la voz.
+- El reemplazo a modelos locales toca **solo [`tools/voice.py`](tools/voice.py)** (mismo patrón que el LLM). La verificación en directo de ambos tramos está en [`scripts/voice_smoke.py`](scripts/voice_smoke.py) (TTS → STT round-trip).
 
 ---
 
@@ -134,13 +134,20 @@ ContactCenterCustomerService/
 ├── config/
 │   ├── settings.py                  # Modelos, rutas, voz, parámetros del spec y del enrutador
 │   └── intents.py                   # Registro de intenciones (keywords + ejemplos)
-├── tests/                           # Pruebas unitarias (58, deterministas)  ✅
+├── tests/                           # Pruebas unitarias (64, deterministas)  ✅
 ├── main.py                          # CLI conversacional
 ├── smoke_test.py                    # Verificación del entorno (Groq, embeddings, CrewAI)
 └── DEMO_RUNBOOK.md                  # Guion de la demo (escenas + frases verificadas)  ✅
 ```
 
-> 🎬 **Para la defensa en directo**, sigue [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md): checklist previo, escenas guionizadas (hipoteca / incidencia / handoff / fuera de alcance), mensajes clave y plan B. Todas las frases están verificadas contra el sistema actual.
+**📂 Accesos directos:**
+- **Datasets:** [`clientes_demo.csv`](knowledge_base/raw_docs/clientes_demo.csv) (clientes sintéticos para el lookup de hipotecas) · [`banking_knowledge_base_1000.csv`](knowledge_base/raw_docs/banking_knowledge_base_1000.csv) (base de conocimiento del RAG)
+- **Agentes:** [router](agents/router.py) · [hipotecas](agents/mortgage_agent.py) · [atención al cliente](agents/customer_service_agent.py)
+- **Lógica determinista:** [motor de asesoría](tools/financial_calculator/advisory.py) · [núcleo de cálculo](tools/financial_calculator/mortgage_core.py) · [lookup de clientes](tools/financial_calculator/client_lookup.py)
+- **Config:** [`settings.py`](config/settings.py) · [`intents.py`](config/intents.py)
+- **Docs:** [guion de demo](DEMO_RUNBOOK.md) · [despliegue en HF Spaces](DEPLOY_HF.md) · [spec de hipotecas](agente_hipotecas_system_prompt.md)
+
+> 🎬 **Para la defensa en directo**, sigue [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md): checklist previo, escenas guionizadas (hipoteca / cliente existente / incidencia / handoff / fuera de alcance), mensajes clave y plan B. Todas las frases están verificadas contra el sistema actual.
 
 ---
 
@@ -202,31 +209,32 @@ pip install -r requirements.txt
 ## 📊 Estado del proyecto
 
 ### ✅ Hecho y verificado
-- **Canal de voz** (`tools/voice.py`, `ui/app.py`): conversación por voz extremo a extremo — 🎙️ grabar → STT (Groq Whisper) → enrutador → agente → TTS (edge-tts) → 🔊, con *toggle* de voz y entrada también por texto. Round-trip TTS→STT verificado en vivo (`scripts/voice_smoke.py`).
-- **Enrutador por niveles** (`agents/router.py`): cascada Tier 0 (reglas) → Tier 1 (semántico) → Tier 2 (LLM) con gating por confianza, sesión *sticky*, aclaración y escalado a humano. Verificado en vivo y con tests offline.
-- **Agente de Hipotecas — flujo de asesoría completo** (`agente_hipotecas_system_prompt.md`):
-  - Núcleo determinista (`mortgage_core.py`): LTV, TIN final (base − bonificaciones + ajuste LTV, suelo 1,20%), cuota, ratio de esfuerzo `(cuota+deudas)/ingresos`, estabilidad laboral, historial, test de estrés, *rating* A/B/C/D con **regla de oro**, y rentabilidad.
-  - Motor de asesoría Fase 1→3 (`advisory.py`): árbol de decisión, **motor de recomendaciones** (Modificar/Contratar/Eliminar), **escalado a gestor humano** (§7) y mensaje al cliente **§8-safe** (no revela rating/fórmulas).
-  - Agente conversacional multi-turno que recoge datos y llama a `EvaluarHipotecaTool` (los cálculos y la decisión los hace el código, no el LLM; `temperature=0`).
-  - **Lookup de cliente existente** (`client_lookup.py` + `ConsultarClienteTool`): si quien llama ya es cliente, da su DNI/teléfono y el sistema recupera su perfil (ingresos, contrato, antigüedad, deudas, productos vinculados) desde `clientes_demo.csv`. La evaluación usa `EvaluarHipotecaClienteTool`, que **lee los datos financieros directamente del sistema** (no pasan por el LLM) y aplica automáticamente las bonificaciones por vinculación. Más rápido, más realista y sin riesgo de transcripción.
-- **Agente de Atención al Cliente — flujo de incidencias completo** (`customer_service_agent.py`): mismo patrón *Mind + Tools* que hipotecas — la recuperación y la **decisión de escalado son deterministas**, el LLM solo redacta. (1) `retrieve()` devuelve los mejores resultados con *score* de relevancia; (2) si el mejor está por debajo de `RAG_MIN_RELEVANCE` (0,12, calibrado) → **escalado a humano** verbatim, sin improvisar; (3) si pasa el filtro, el LLM responde **solo** desde el contexto recuperado y con **memoria conversacional**, y admite no saber en vez de inventar. **Estilo de llamada:** respuestas breves y directas; el agente **es** la línea de atención, así que nunca remite a "llamar a atención al cliente / a un número" — si no puede resolver, **pasa con un gestor**. Verificado en vivo (respuesta fundamentada / memoria / handoff / concisión).
-- **Pipeline RAG completo**: ingesta → índice FAISS → búsqueda con relevancia coseno. Dataset actual: `banking_knowledge_base_1000.csv` (989 Q&A en 10 secciones).
-- **`RAGSearchTool`** con embeddings centralizados (`tools/embeddings.py`) para no divergir entre indexado y consulta.
-- **UIs Streamlit**: `app.py` (chat multiagente por **voz + texto** con enrutador, sesión sticky y chip de nivel), `rag_explorer.py` (verifica el RAG sin LLM) y `mortgage_chat.py` (chat de hipotecas); booteadas con `AppTest`.
-- **58 tests** deterministas (`pytest`) sobre el núcleo, el motor de asesoría, el enrutador y el *gate* de incidencias; flujos verificados en vivo contra Groq.
+- **Canal de voz** ([`tools/voice.py`](tools/voice.py), [`ui/app.py`](ui/app.py)): conversación por voz extremo a extremo — 🎙️ grabar → STT (Groq Whisper) → enrutador → agente → TTS (edge-tts) → 🔊, con *toggle* de voz y entrada también por texto. Round-trip TTS→STT verificado en vivo ([`scripts/voice_smoke.py`](scripts/voice_smoke.py)).
+- **Enrutador por niveles** ([`agents/router.py`](agents/router.py)): cascada Tier 0 (reglas) → Tier 1 (semántico) → Tier 2 (LLM) con gating por confianza, sesión *sticky*, aclaración y escalado a humano. Verificado en vivo y con tests offline.
+- **Agente de Hipotecas — flujo de asesoría completo** ([`agente_hipotecas_system_prompt.md`](agente_hipotecas_system_prompt.md)):
+  - Núcleo determinista ([`mortgage_core.py`](tools/financial_calculator/mortgage_core.py)): LTV, TIN final (base − bonificaciones + ajuste LTV, suelo 1,20%), cuota, ratio de esfuerzo `(cuota+deudas)/ingresos`, estabilidad laboral, historial, test de estrés, *rating* A/B/C/D con **regla de oro**, y rentabilidad.
+  - Motor de asesoría Fase 1→3 ([`advisory.py`](tools/financial_calculator/advisory.py)): árbol de decisión, **motor de recomendaciones** (Modificar/Contratar/Eliminar), **escalado a gestor humano** (§7) y mensaje al cliente **§8-safe** (no revela rating/fórmulas).
+  - Agente conversacional multi-turno ([`agents/mortgage_agent.py`](agents/mortgage_agent.py)) que recoge datos y llama a `EvaluarHipotecaTool` ([`advisory_tool.py`](tools/financial_calculator/advisory_tool.py)); los cálculos y la decisión los hace el código, no el LLM (`temperature=0`).
+  - **Lookup de cliente existente** ([`client_lookup.py`](tools/financial_calculator/client_lookup.py) + [`ConsultarClienteTool`](tools/financial_calculator/client_tool.py)): si quien llama ya es cliente, da su DNI/teléfono y el sistema recupera su perfil (ingresos, contrato, antigüedad, deudas, productos vinculados) desde [`clientes_demo.csv`](knowledge_base/raw_docs/clientes_demo.csv). La evaluación usa [`EvaluarHipotecaClienteTool`](tools/financial_calculator/advisory_tool.py), que **lee los datos financieros directamente del sistema** (no pasan por el LLM) y aplica automáticamente las bonificaciones por vinculación. Más rápido, más realista y sin riesgo de transcripción.
+- **Agente de Atención al Cliente — flujo de incidencias completo** ([`customer_service_agent.py`](agents/customer_service_agent.py)): mismo patrón *Mind + Tools* que hipotecas — la recuperación y la **decisión de escalado son deterministas**, el LLM solo redacta. (1) `retrieve()` ([`rag_search.py`](tools/rag_search.py)) devuelve los mejores resultados con *score* de relevancia; (2) si el mejor está por debajo de `RAG_MIN_RELEVANCE` (0,12, calibrado) → **escalado a humano** verbatim, sin improvisar; (3) si pasa el filtro, el LLM responde **solo** desde el contexto recuperado y con **memoria conversacional**, y admite no saber en vez de inventar. **Estilo de llamada:** respuestas breves y directas; el agente **es** la línea de atención, así que nunca remite a "llamar a atención al cliente / a un número" — si no puede resolver, **pasa con un gestor**. Verificado en vivo (respuesta fundamentada / memoria / handoff / concisión).
+- **Pipeline RAG completo**: ingesta → índice FAISS → búsqueda con relevancia coseno. Dataset actual: [`banking_knowledge_base_1000.csv`](knowledge_base/raw_docs/banking_knowledge_base_1000.csv) (989 Q&A en 10 secciones).
+- **`RAGSearchTool`** con embeddings centralizados ([`tools/embeddings.py`](tools/embeddings.py)) para no divergir entre indexado y consulta.
+- **UIs Streamlit**: [`app.py`](ui/app.py) (chat multiagente por **voz + texto** con enrutador, sesión sticky y chip de nivel), [`rag_explorer.py`](ui/rag_explorer.py) (verifica el RAG sin LLM) y [`mortgage_chat.py`](ui/mortgage_chat.py) (chat de hipotecas); booteadas con `AppTest`.
+- **64 tests** deterministas ([`tests/`](tests/)) sobre el núcleo, el motor de asesoría, el enrutador, el *gate* de incidencias y el lookup de clientes; flujos verificados en vivo contra Groq.
 
 ### 📋 Pendiente (TODO)
 - [ ] Migrar los componentes en la nube a **equivalentes locales open-source** (LLM → Llama 3.1 8B / Qwen 2.5 7B; STT → `faster-whisper`; TTS → Piper) → despliegue *on-premise*.
 - [ ] Observabilidad del enrutador: logging de decisiones, evaluación contra set etiquetado y minería de errores de enrutado.
-- [ ] `credit_rating.py` queda como **legado** (el rating oficial vive en `mortgage_core`); decidir si retirarlo.
+- [ ] [`credit_rating.py`](tools/financial_calculator/credit_rating.py) queda como **legado** (el rating oficial vive en [`mortgage_core.py`](tools/financial_calculator/mortgage_core.py)); decidir si retirarlo.
 - [ ] (Opcional) Integración con n8n / Flowise (`start_n8n.bat`, `start_flowise.bat`).
 
 ---
 
 ## 📝 Notas
 
-- **Dataset RAG:** `banking_knowledge_base_1000.csv` (`Section, Question, Answer`, ~1000 filas, UTF-8) sustituye al antiguo `Dataset_Banking_chatbot.csv`. Está en **inglés**; gracias al modelo de embeddings multilingüe, una consulta en **español** recupera correctamente de la base en inglés, y el LLM responde en español.
-- **Embeddings multilingües:** si cambias el modelo de embeddings, **reconstruye el índice** (`scripts/build_index.py`) — el espacio vectorial cambia aunque la dimensión siga siendo 384.
-- **Voz:** la entrada por micrófono de `ui/app.py` requiere navegador con permiso de micro; STT/TTS de la demo necesitan red (Groq / Microsoft edge-tts). Si fallan, la app **degrada a texto** sin romperse. Verifica los dos tramos en directo con `scripts/voice_smoke.py`.
-- **Calibración de tipos (hipotecas):** los tipos del spec son de una época de Euríbor bajo. En `settings.py` se usa `EURIBOR_ACTUAL = 1.20` para que la capa de rentabilidad (§5) sea coherente; cámbialo junto con los `TIN_BASE_*` si quieres un entorno de mercado distinto.
+- **Dataset RAG:** [`banking_knowledge_base_1000.csv`](knowledge_base/raw_docs/banking_knowledge_base_1000.csv) (`Section, Question, Answer`, ~1000 filas, UTF-8) sustituye al antiguo `Dataset_Banking_chatbot.csv`. Está en **inglés**; gracias al modelo de embeddings multilingüe, una consulta en **español** recupera correctamente de la base en inglés, y el LLM responde en español.
+- **Dataset de clientes:** [`clientes_demo.csv`](knowledge_base/raw_docs/clientes_demo.csv) (10 clientes sintéticos, clave por DNI y teléfono) alimenta el [lookup de cliente existente](tools/financial_calculator/client_lookup.py) del agente de hipotecas. DNIs útiles para la demo: `12345678Z` (perfil sólido y vinculado), `55667788B` (autónomo), `44556677D` (con impagos), `66778899G` (temporal, ingresos bajos).
+- **Embeddings multilingües:** si cambias el modelo de embeddings, **reconstruye el índice** ([`scripts/build_index.py`](scripts/build_index.py)) — el espacio vectorial cambia aunque la dimensión siga siendo 384.
+- **Voz:** la entrada por micrófono de [`ui/app.py`](ui/app.py) requiere navegador con permiso de micro; STT/TTS de la demo necesitan red (Groq / Microsoft edge-tts). Si fallan, la app **degrada a texto** sin romperse. Verifica los dos tramos en directo con [`scripts/voice_smoke.py`](scripts/voice_smoke.py).
+- **Calibración de tipos (hipotecas):** los tipos del spec son de una época de Euríbor bajo. En [`settings.py`](config/settings.py) se usa `EURIBOR_ACTUAL = 1.20` para que la capa de rentabilidad (§5) sea coherente; cámbialo junto con los `TIN_BASE_*` si quieres un entorno de mercado distinto.
 - `.env`, `.venv/`, cachés y la config local de herramientas están excluidos vía `.gitignore`.
