@@ -63,7 +63,8 @@ def main() -> None:
         if decision.route_to == INTENT_MORTGAGE:
             reply = answer_mortgage_query("\n".join(history_lines))
         elif decision.route_to == INTENT_INCIDENT:
-            reply = answer_incident_query(user)
+            # Prior turns (history_lines already has the current "Cliente:" line).
+            reply = answer_incident_query(user, "\n".join(history_lines[:-1]))
         elif decision.route_to == ROUTE_HUMAN:
             reply = "Te paso con un gestor humano que continuará atendiéndote. Un momento, por favor."
         elif decision.route_to == ROUTE_CLARIFY:

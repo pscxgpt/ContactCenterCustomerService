@@ -14,6 +14,13 @@ CUSTOMER_SERVICE_MODEL = "groq/llama-3.3-70b-versatile"
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 EMBEDDING_DIM = 384
 
+# Voice (demo: cloud; the prod swap is a one-file change in tools/voice.py)
+#   STT — Groq Whisper, reuses GROQ_API_KEY.       Prod swap: faster-whisper (local).
+#   TTS — edge-tts neural Spanish voice.           Prod swap: Piper (local OSS).
+STT_MODEL = "whisper-large-v3-turbo"
+STT_LANGUAGE = "es"
+TTS_VOICE = "es-ES-AlvaroNeural"
+
 # Vector store
 VECTOR_STORE_PATH = "knowledge_base/vector_store"
 RAW_DOCS_PATH = "knowledge_base/raw_docs"
@@ -23,6 +30,11 @@ FAQ_CSV_PATH = os.path.join(RAW_DOCS_PATH, "banking_knowledge_base_1000.csv")
 
 # Retrieval
 RETRIEVAL_K = 3
+# Deterministic handoff gate for the incident agent: if the best KB hit scores
+# below this cosine relevance, we escalate to a human instead of letting the LLM
+# improvise an answer. Calibrated on the current store: off-topic queries score
+# ≤ -0.02 and genuine incidents ≥ 0.19, so 0.12 separates them with margin.
+RAG_MIN_RELEVANCE = 0.12
 
 # Intents the router can classify
 INTENT_MORTGAGE = "hipotecas"

@@ -4,6 +4,8 @@ the banking FAQ dataset (Query/Response pairs).
 """
 from __future__ import annotations
 import os
+import warnings
+from dataclasses import dataclass
 from functools import lru_cache
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -16,6 +18,35 @@ from tools.embeddings import get_embeddings
 def _load_store() -> FAISS:
     """Load the FAISS store once and cache it (embeddings model is heavy)."""
     return FAISS.load_local(VECTOR_STORE_PATH, get_embeddings(), allow_dangerous_deserialization=True)
+
+
+@dataclass
+class RAGHit:
+    query: str
+    response: str
+    score: float  # cosine relevance in [0, 1]; higher = more relevant
+
+
+def retrieve(query: str, k: int = RETRIEVAL_K) -> list[RAGHit]:
+    """Structured retrieval primitive — returns scored hits (best first) so the
+    caller can make a deterministic relevance decision (e.g. handoff gate)."""
+    if not os.path.exists(VECTOR_STORE_PATH):
+        return []
+    store = _load_store()
+    # Cosine relevance over normalized embeddings can be negative for unrelated
+    # queries (that's exactly our off-topic signal); LangChain warns because it
+    # expects [0, 1]. The ordering is still valid, so silence the noisy warning.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=UserWarning)
+        results = store.similarity_search_with_relevance_scores(query, k=k)
+    return [
+        RAGHit(
+            query=doc.metadata.get("query", ""),
+            response=doc.metadata.get("response", doc.page_content),
+            score=float(score),
+        )
+        for doc, score in results
+    ]
 
 
 class RAGSearchInput(BaseModel):
@@ -35,14 +66,11 @@ class RAGSearchTool(BaseTool):
         if not os.path.exists(VECTOR_STORE_PATH):
             return "Knowledge base not found. Please run scripts/build_index.py first."
 
-        store = _load_store()
-        results = store.similarity_search_with_relevance_scores(query, k=k)
-        if not results:
+        hits = retrieve(query, k=k)
+        if not hits:
             return "No relevant information found in the knowledge base."
 
-        blocks = []
-        for i, (doc, score) in enumerate(results, 1):
-            q = doc.metadata.get("query", "")
-            a = doc.metadata.get("response", doc.page_content)
-            blocks.append(f"[{i}] (relevancia={score:.2f})\nP: {q}\nR: {a}")
-        return "\n\n".join(blocks)
+        return "\n\n".join(
+            f"[{i}] (relevancia={h.score:.2f})\nP: {h.query}\nR: {h.response}"
+            for i, h in enumerate(hits, 1)
+        )

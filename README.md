@@ -11,16 +11,16 @@ Plataforma inteligente para un *Contact Center* bancario de banca de particulare
 1. **Cerebro + Herramientas (Mind + Tools):** el LLM **no** es la base de conocimiento ni una calculadora. Actúa solo como **motor de razonamiento y enrutamiento**: entiende la intención, extrae entidades y delega la ejecución en **herramientas deterministas en Python** (cálculos exactos) o en **búsqueda semántica local** (RAG). Esto elimina alucinaciones en cifras críticas.
 2. **Modelos Open-Source:** diseñado para ejecutarse con modelos compactos (Llama 3.1 8B, Qwen 2.5 7B) desplegables *on-premise* / nube privada → **privacidad total de datos** y **OpEx mínimo**.
 
-> ⚠️ **Nota de estado:** durante el desarrollo, los agentes usan **Groq (`llama-3.3-70b-versatile`)** como LLM por velocidad de iteración. La migración a un modelo open-source local es una tarea pendiente (ver [Roadmap](#-estado-del-proyecto)).
+> ⚠️ **Nota de estado:** para la *demo*, los componentes en la nube se eligen por velocidad y fiabilidad en directo, pero todos tienen un **reemplazo local de un solo punto de cambio** (la tesis open-source): LLM → **Groq** (`llama-3.3-70b-versatile`) ⇒ Llama 3.1 8B / Qwen 2.5 7B; STT → **Groq Whisper** ⇒ `faster-whisper`; TTS → **edge-tts** ⇒ Piper. La lógica sensible (cálculos, decisiones de riesgo, RAG) ya corre **100 % local**. La migración a modelos locales es una tarea pendiente (ver [Roadmap](#-estado-del-proyecto)).
 
 ---
 
 ## 🏗️ Arquitectura
 
 ```text
-[ Cliente ] 📞
-     │
-     ▼
+[ Cliente ] 📞  ──habla──►  🎙️ STT (Groq Whisper)  ──┐
+     │  (o escribe)                                   │ texto
+     ▼                                                ▼
 ┌──────────────────────── ENRUTADOR POR NIVELES (cascada) ────────────────────────┐
 │  Tier 0  reglas/keywords + "hablar con persona"      (0 ms, sin modelo)          │
 │  Tier 1  clasificador semántico (embeddings locales) (~ms, sin tokens)           │
@@ -32,11 +32,14 @@ Plataforma inteligente para un *Contact Center* bancario de banca de particulare
      │                      │  Agente Hipotecas  │      (Python determinista, Fase 1→3)
      │                      └────────────────────┘
      │
-     ├─► [ Incidencias ] ─► ┌────────────────────┐ ─► [ RAG: Base de Conocimiento ]
-     │                      │ Agente At. Cliente │      (FAISS local)
-     │                      └────────────────────┘
+     ├─► [ Incidencias ] ─► ┌────────────────────┐ ─► [ RAG + gate de relevancia ]
+     │                      │ Agente At. Cliente │      (FAISS local; si no hay
+     │                      └────────────────────┘       match fiable → humano)
      │
      └─► [ Humano / Aclaración ]   (baja confianza, tema sensible o petición explícita)
+                     │ respuesta (texto)
+                     ▼
+              🔊 TTS (edge-tts)  ──►  [ Cliente ] escucha
 ```
 
 ---
@@ -63,6 +66,24 @@ Cada decisión devuelve un `RouteDecision` estructurado (`route_to`, `tier`, `co
 
 ---
 
+## 🎙️ Voz (canal de contact center)
+
+El sistema es **conversacional por voz**: el cliente habla, el agente responde con voz, igual que en una llamada real — pero toda la inteligencia es la misma que en texto. La voz es una **capa fina e intercambiable** alrededor de los agentes (`tools/voice.py`); el enrutador y los agentes no saben cómo entra ni sale el audio.
+
+```text
+🎙️ grabar ─► STT (Groq Whisper) ─► route_turn() ─► agente ─► texto ─► TTS (edge-tts) ─► 🔊
+```
+
+| Pieza | Demo (nube) | Reemplazo local (producción) |
+|---|---|---|
+| **STT** (voz → texto) | Groq Whisper (`whisper-large-v3-turbo`), reutiliza `GROQ_API_KEY` | `faster-whisper` (offline) |
+| **TTS** (texto → voz) | edge-tts, voz neuronal `es-ES-AlvaroNeural` | Piper (open-source, offline) |
+
+- En `ui/app.py` cada turno entra por **voz** (botón 🎙️ `st.audio_input`) o por **texto**; la respuesta hablada se reproduce automáticamente y hay un *toggle* en la barra lateral para activar/desactivar la voz.
+- El reemplazo a modelos locales toca **solo `tools/voice.py`** (mismo patrón que el LLM). La verificación en directo de ambos tramos está en `scripts/voice_smoke.py` (TTS → STT round-trip).
+
+---
+
 ## 📁 Estructura del proyecto
 
 ```
@@ -71,7 +92,7 @@ ContactCenterCustomerService/
 │   ├── router.py                    # Enrutador por niveles (cascada) + sesión sticky  ✅
 │   ├── router_agent.py              # Clasificador LLM (Tier 2 del enrutador)
 │   ├── mortgage_agent.py            # Agente de hipotecas conversacional  ✅
-│   └── customer_service_agent.py    # Agente de incidencias (RAG)
+│   └── customer_service_agent.py    # Agente de incidencias (RAG + gate + memoria)  ✅
 ├── tools/
 │   ├── financial_calculator/        # Lógica hipotecaria
 │   │   ├── mortgage_core.py         # Núcleo determinista (LTV, TIN, rating…)  ✅
@@ -79,20 +100,23 @@ ContactCenterCustomerService/
 │   │   ├── advisory_tool.py         # EvaluarHipotecaTool (CrewAI)  ✅
 │   │   ├── bonification_calculator.py / ltv_calculator.py / ...
 │   │   └── _helpers.py              # Amortización francesa, TAE
-│   ├── rag_search.py                # Búsqueda semántica FAISS  ✅
-│   └── embeddings.py                # Modelo de embeddings compartido
+│   ├── rag_search.py                # Búsqueda semántica FAISS + retrieve() con scores  ✅
+│   ├── embeddings.py                # Modelo de embeddings compartido
+│   └── voice.py                     # STT (Groq Whisper) + TTS (edge-tts)  ✅
 ├── knowledge_base/
 │   ├── raw_docs/                    # Dataset fuente (banking_knowledge_base_1000.csv)
 │   └── vector_store/                # Índice FAISS generado (versionado)
-├── scripts/build_index.py           # Construye el índice FAISS desde el CSV  ✅
+├── scripts/
+│   ├── build_index.py               # Construye el índice FAISS desde el CSV  ✅
+│   └── voice_smoke.py               # Round-trip de voz TTS→STT (verifica STT y TTS)  ✅
 ├── ui/
-│   ├── app.py                       # Chat multiagente (router → agentes)
+│   ├── app.py                       # Chat multiagente por voz + texto (router → agentes)  ✅
 │   ├── rag_explorer.py              # UI para verificar el RAG (sin LLM)  ✅
 │   └── mortgage_chat.py             # Chat conversacional de hipotecas  ✅
 ├── config/
-│   ├── settings.py                  # Modelos, rutas, parámetros del spec y del enrutador
+│   ├── settings.py                  # Modelos, rutas, voz, parámetros del spec y del enrutador
 │   └── intents.py                   # Registro de intenciones (keywords + ejemplos)
-├── tests/                           # Pruebas unitarias (54, deterministas)  ✅
+├── tests/                           # Pruebas unitarias (58, deterministas)  ✅
 ├── main.py                          # CLI conversacional
 └── smoke_test.py                    # Verificación del entorno (Groq, embeddings, CrewAI)
 ```
@@ -105,6 +129,7 @@ ContactCenterCustomerService/
 |---|---|
 | Orquestación de agentes | CrewAI |
 | LLM (dev) | Groq · `llama-3.3-70b-versatile` |
+| Voz — STT / TTS | Groq Whisper (`whisper-large-v3-turbo`) / edge-tts (`es-ES-AlvaroNeural`) |
 | Embeddings | `sentence-transformers` · `paraphrase-multilingual-MiniLM-L12-v2` (384 dim, ES/EN) |
 | Vector store | FAISS (local, CPU) |
 | Framework RAG | LangChain |
@@ -133,13 +158,19 @@ pip install -r requirements.txt
 # 5. (Opcional) Ejecuta los tests deterministas
 .venv\Scripts\python.exe -m pytest -q
 
-# 6a. Verifica el RAG visualmente (sin LLM)
+# 5b. (Opcional) Verifica el canal de voz (round-trip TTS→STT)
+.venv\Scripts\python.exe scripts\voice_smoke.py
+
+# 6a. App principal: chat multiagente por VOZ + texto (router → agentes)
+.venv\Scripts\python.exe -m streamlit run ui\app.py
+
+# 6b. Verifica el RAG visualmente (sin LLM)
 .venv\Scripts\python.exe -m streamlit run ui\rag_explorer.py
 
-# 6b. Chat conversacional del agente de hipotecas
+# 6c. Chat conversacional del agente de hipotecas
 .venv\Scripts\python.exe -m streamlit run ui\mortgage_chat.py
 
-# 6c. CLI conversacional (router → agente)
+# 6d. CLI conversacional (router → agente)
 .venv\Scripts\python.exe main.py
 ```
 
@@ -150,21 +181,20 @@ pip install -r requirements.txt
 ## 📊 Estado del proyecto
 
 ### ✅ Hecho y verificado
+- **Canal de voz** (`tools/voice.py`, `ui/app.py`): conversación por voz extremo a extremo — 🎙️ grabar → STT (Groq Whisper) → enrutador → agente → TTS (edge-tts) → 🔊, con *toggle* de voz y entrada también por texto. Round-trip TTS→STT verificado en vivo (`scripts/voice_smoke.py`).
 - **Enrutador por niveles** (`agents/router.py`): cascada Tier 0 (reglas) → Tier 1 (semántico) → Tier 2 (LLM) con gating por confianza, sesión *sticky*, aclaración y escalado a humano. Verificado en vivo y con tests offline.
 - **Agente de Hipotecas — flujo de asesoría completo** (`agente_hipotecas_system_prompt.md`):
   - Núcleo determinista (`mortgage_core.py`): LTV, TIN final (base − bonificaciones + ajuste LTV, suelo 1,20%), cuota, ratio de esfuerzo `(cuota+deudas)/ingresos`, estabilidad laboral, historial, test de estrés, *rating* A/B/C/D con **regla de oro**, y rentabilidad.
   - Motor de asesoría Fase 1→3 (`advisory.py`): árbol de decisión, **motor de recomendaciones** (Modificar/Contratar/Eliminar), **escalado a gestor humano** (§7) y mensaje al cliente **§8-safe** (no revela rating/fórmulas).
   - Agente conversacional multi-turno que recoge datos y llama a `EvaluarHipotecaTool` (los cálculos y la decisión los hace el código, no el LLM; `temperature=0`).
-- **Pipeline RAG completo** (Atención al Cliente): ingesta → índice FAISS → búsqueda con relevancia coseno `[0,1]`. Dataset actual: `banking_knowledge_base_1000.csv` (989 Q&A en 10 secciones).
+- **Agente de Atención al Cliente — flujo de incidencias completo** (`customer_service_agent.py`): mismo patrón *Mind + Tools* que hipotecas — la recuperación y la **decisión de escalado son deterministas**, el LLM solo redacta. (1) `retrieve()` devuelve los mejores resultados con *score* de relevancia; (2) si el mejor está por debajo de `RAG_MIN_RELEVANCE` (0,12, calibrado) → **escalado a humano** verbatim, sin improvisar; (3) si pasa el filtro, el LLM responde **solo** desde el contexto recuperado y con **memoria conversacional**, y admite no saber en vez de inventar. Verificado en vivo (respuesta fundamentada / memoria / handoff).
+- **Pipeline RAG completo**: ingesta → índice FAISS → búsqueda con relevancia coseno. Dataset actual: `banking_knowledge_base_1000.csv` (989 Q&A en 10 secciones).
 - **`RAGSearchTool`** con embeddings centralizados (`tools/embeddings.py`) para no divergir entre indexado y consulta.
-- **UIs Streamlit**: `app.py` (chat multiagente con enrutador + sesión sticky y chip de nivel), `rag_explorer.py` (verifica el RAG sin LLM) y `mortgage_chat.py` (chat de hipotecas); booteadas con `AppTest`.
-- **54 tests** deterministas (`pytest`) sobre el núcleo, el motor de asesoría y el enrutador; flujos verificados en vivo contra Groq.
-
-### 🚧 Parcial / sin verificar end-to-end
-- **Agente de Atención al Cliente** (`customer_service_agent.py`): cableado al RAG; falta prueba end-to-end completa (router → RAG → respuesta).
+- **UIs Streamlit**: `app.py` (chat multiagente por **voz + texto** con enrutador, sesión sticky y chip de nivel), `rag_explorer.py` (verifica el RAG sin LLM) y `mortgage_chat.py` (chat de hipotecas); booteadas con `AppTest`.
+- **58 tests** deterministas (`pytest`) sobre el núcleo, el motor de asesoría, el enrutador y el *gate* de incidencias; flujos verificados en vivo contra Groq.
 
 ### 📋 Pendiente (TODO)
-- [ ] Migrar el LLM de Groq a un **modelo open-source local** (Llama 3.1 8B / Qwen 2.5 7B) → despliegue *on-premise*.
+- [ ] Migrar los componentes en la nube a **equivalentes locales open-source** (LLM → Llama 3.1 8B / Qwen 2.5 7B; STT → `faster-whisper`; TTS → Piper) → despliegue *on-premise*.
 - [ ] Observabilidad del enrutador: logging de decisiones, evaluación contra set etiquetado y minería de errores de enrutado.
 - [ ] `credit_rating.py` queda como **legado** (el rating oficial vive en `mortgage_core`); decidir si retirarlo.
 - [ ] (Opcional) Integración con n8n / Flowise (`start_n8n.bat`, `start_flowise.bat`).
@@ -175,5 +205,6 @@ pip install -r requirements.txt
 
 - **Dataset RAG:** `banking_knowledge_base_1000.csv` (`Section, Question, Answer`, ~1000 filas, UTF-8) sustituye al antiguo `Dataset_Banking_chatbot.csv`. Está en **inglés**; gracias al modelo de embeddings multilingüe, una consulta en **español** recupera correctamente de la base en inglés, y el LLM responde en español.
 - **Embeddings multilingües:** si cambias el modelo de embeddings, **reconstruye el índice** (`scripts/build_index.py`) — el espacio vectorial cambia aunque la dimensión siga siendo 384.
+- **Voz:** la entrada por micrófono de `ui/app.py` requiere navegador con permiso de micro; STT/TTS de la demo necesitan red (Groq / Microsoft edge-tts). Si fallan, la app **degrada a texto** sin romperse. Verifica los dos tramos en directo con `scripts/voice_smoke.py`.
 - **Calibración de tipos (hipotecas):** los tipos del spec son de una época de Euríbor bajo. En `settings.py` se usa `EURIBOR_ACTUAL = 1.20` para que la capa de rentabilidad (§5) sea coherente; cámbialo junto con los `TIN_BASE_*` si quieres un entorno de mercado distinto.
 - `.env`, `.venv/`, cachés y la config local de herramientas están excluidos vía `.gitignore`.

@@ -16,6 +16,10 @@ faiss-cpu
 # LiteLLM (required by CrewAI for Groq/non-native LLM routing)
 litellm
 
+# Voice (demo): STT via Groq Whisper, TTS via edge-tts. Prod swap is local.
+groq
+edge-tts
+
 # Data Validation
 pydantic
 
