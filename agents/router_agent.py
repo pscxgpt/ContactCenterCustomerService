@@ -4,6 +4,9 @@ Returns one of: INTENT_MORTGAGE, INTENT_INCIDENT, INTENT_UNKNOWN.
 """
 from crewai import Agent, Task, Crew
 from config.settings import ROUTER_MODEL, INTENT_MORTGAGE, INTENT_INCIDENT, INTENT_UNKNOWN
+from config.llm_patches import patch_groq_cache
+
+patch_groq_cache()
 
 
 _SYSTEM_PROMPT = """

@@ -9,8 +9,9 @@ ROUTER_MODEL = "groq/llama-3.3-70b-versatile"
 MORTGAGE_MODEL = "groq/llama-3.3-70b-versatile"
 CUSTOMER_SERVICE_MODEL = "groq/llama-3.3-70b-versatile"
 
-# Embeddings
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+# Embeddings — multilingual (ES/EN) for the Spanish router + EN knowledge base.
+# 384-dim, same as the previous all-MiniLM-L6-v2, so the vector store layout is unchanged.
+EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 EMBEDDING_DIM = 384
 
 # Vector store
@@ -27,6 +28,15 @@ RETRIEVAL_K = 3
 INTENT_MORTGAGE = "hipotecas"
 INTENT_INCIDENT = "incidencias"
 INTENT_UNKNOWN = "desconocido"
+
+# Router (tiered cascade) thresholds — tuned for the multilingual MiniLM cosine
+# sims. With this model Spanish on-topic queries score ~0.55-0.90 and off-topic
+# ~0.1-0.3, so the absolute threshold separates well; the margin is a secondary
+# guard. Anything not clearly in-scope escalates to the Tier-2 LLM.
+ROUTER_TIER1_HIGH = 0.55        # minimum top score to accept a Tier-1 match
+ROUTER_TIER1_MARGIN = 0.08      # required gap over the 2nd-best intent
+ROUTER_TIER1_LOW = 0.38         # below this → out-of-scope; between → clarify
+ROUTER_STICKY_SWITCH_CONF = 0.60  # confidence needed to switch away from the active agent
 
 # ── Mortgage rates & risk parameters ─────────────────────────────────
 # Source of truth: agente_hipotecas_system_prompt.md (the advisory spec).

@@ -21,7 +21,7 @@ try:
 except Exception:
     pass
 
-from agents.router_agent import classify_intent
+from agents.router import route_turn, ROUTE_HUMAN, ROUTE_CLARIFY, ROUTE_UNKNOWN
 from agents.mortgage_agent import answer_mortgage_query
 from agents.customer_service_agent import answer_incident_query
 from config.settings import INTENT_MORTGAGE, INTENT_INCIDENT
@@ -32,7 +32,7 @@ EXIT_WORDS = {"salir", "exit", "quit", "adios", "adiós"}
 def main() -> None:
     print("🏦 Contact Center — banca de particulares (escribe 'salir' para terminar)\n")
 
-    active_intent = None
+    session: dict = {"active_intent": None}
     history_lines: list[str] = []
 
     # Optional first message from argv
@@ -56,21 +56,22 @@ def main() -> None:
             print("Agente: Gracias por contactar con nosotros. ¡Hasta pronto!")
             return
 
-        # Route on the first turn only.
-        if active_intent is None:
-            active_intent = classify_intent(user)
-            print(f"[Router] Motivo detectado: {active_intent}")
-
+        decision = route_turn(user, session)
+        print(f"[Router] {decision.chip}  ({decision.reason})")
         history_lines.append(f"Cliente: {user}")
 
-        if active_intent == INTENT_MORTGAGE:
+        if decision.route_to == INTENT_MORTGAGE:
             reply = answer_mortgage_query("\n".join(history_lines))
-        elif active_intent == INTENT_INCIDENT:
+        elif decision.route_to == INTENT_INCIDENT:
             reply = answer_incident_query(user)
-        else:
+        elif decision.route_to == ROUTE_HUMAN:
+            reply = "Te paso con un gestor humano que continuará atendiéndote. Un momento, por favor."
+        elif decision.route_to == ROUTE_CLARIFY:
+            reply = ("Para ayudarte mejor, ¿tu consulta es sobre una hipoteca o sobre "
+                     "una incidencia de tu cuenta (tarjeta, transferencia, fraude...)?")
+        else:  # ROUTE_UNKNOWN
             reply = ("Puedo ayudarte con hipotecas o con incidencias de tu cuenta. "
                      "¿Cuál es tu consulta?")
-            active_intent = None  # let the next message re-route
 
         print(f"Agente: {reply}\n")
         history_lines.append(f"Agente: {reply}")

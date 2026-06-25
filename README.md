@@ -21,18 +21,45 @@ Plataforma inteligente para un *Contact Center* bancario de banca de particulare
 [ Cliente ] 📞
      │
      ▼
-┌────────────────────────────┐
-│  Agente Enrutador (LLM)    │ ─► Clasifica intención
-└────────────────────────────┘
+┌──────────────────────── ENRUTADOR POR NIVELES (cascada) ────────────────────────┐
+│  Tier 0  reglas/keywords + "hablar con persona"      (0 ms, sin modelo)          │
+│  Tier 1  clasificador semántico (embeddings locales) (~ms, sin tokens)           │
+│  Tier 2  LLM (solo si Tier 1 no es concluyente)      (tokens, poco frecuente)    │
+│  + sesión persistente (sticky) · clarificación · escalado a humano               │
+└───────────────┬──────────────────────────────────────────────────────────────────┘
      │
-     ├─► [ Hipotecas ]   ─► ┌────────────────────┐ ─► [ Calculador Financiero ]
-     │                      │  Agente Hipotecas  │      (Python determinista)
+     ├─► [ Hipotecas ]   ─► ┌────────────────────┐ ─► [ Motor de Asesoría ]
+     │                      │  Agente Hipotecas  │      (Python determinista, Fase 1→3)
      │                      └────────────────────┘
      │
-     └─► [ Incidencias ] ─► ┌────────────────────┐ ─► [ RAG: Base de Conocimiento ]
-                            │ Agente At. Cliente │      (FAISS local)
-                            └────────────────────┘
+     ├─► [ Incidencias ] ─► ┌────────────────────┐ ─► [ RAG: Base de Conocimiento ]
+     │                      │ Agente At. Cliente │      (FAISS local)
+     │                      └────────────────────┘
+     │
+     └─► [ Humano / Aclaración ]   (baja confianza, tema sensible o petición explícita)
 ```
+
+---
+
+## 🧭 Enrutador por niveles (cascada)
+
+El enrutador no manda **todo** al LLM: **escala por confianza**, de modo que la mayoría del tráfico se resuelve local y barato, y el LLM solo arbitra los casos ambiguos. Esta es la palanca de **coste/latencia/privacidad** que sostiene la tesis "Mind + Tools / open-source".
+
+| Nivel | Qué hace | Coste |
+|---|---|---|
+| **Tier 0** | Reglas/keywords de alta precisión + petición explícita de persona | 0 ms, sin modelo |
+| **Tier 1** | Clasificador semántico: similitud coseno contra *ejemplos* de cada intención (embeddings locales, los mismos del RAG) | ~ms, sin tokens |
+| **Tier 2** | LLM con clasificación restringida — **solo** si Tier 1 no separa con margen suficiente | tokens, poco frecuente |
+
+Cada decisión devuelve un `RouteDecision` estructurado (`route_to`, `tier`, `confidence`, `reason`) que la UI muestra como chip (`Tier 1 · hipotecas · 0.82`).
+
+**Para un escenario real de call center:**
+- **Sesión persistente (sticky):** una vez derivado a hipotecas, una repregunta ("¿y a 25 años?") **se queda** con el mismo agente; solo se reenruta si el cliente cambia de tema con confianza o pide un humano.
+- **Aclaración y escalado a humano** como rutas de primera clase (baja confianza, tema sensible, petición explícita).
+- **Escala por configuración:** añadir una intención = añadir una entrada en `config/intents.py` (sin reentrenar ni reescribir prompts).
+- **Camino de producción:** clasificador pequeño *fine-tuned* + observabilidad (logging de cada decisión, evaluación contra un set etiquetado, minería de errores de enrutado), servido con un modelo local (vLLM/TGI) y *session store* (Redis) para workers sin estado.
+
+> 🌐 El enrutador (y el RAG) usan un **modelo de embeddings multilingüe** (`paraphrase-multilingual-MiniLM-L12-v2`, 384-dim). En español, las consultas dentro de alcance puntúan ~0.55-0.90 y las de fuera ~0.1-0.3, así que Tier 1 separa con fiabilidad y solo lo dudoso escala al LLM. Además habilita recuperación RAG **consulta en español → base de conocimiento en inglés**.
 
 ---
 
@@ -41,7 +68,8 @@ Plataforma inteligente para un *Contact Center* bancario de banca de particulare
 ```
 ContactCenterCustomerService/
 ├── agents/                          # Agentes (CrewAI)
-│   ├── router_agent.py              # Clasifica intención (hipotecas / incidencias)
+│   ├── router.py                    # Enrutador por niveles (cascada) + sesión sticky  ✅
+│   ├── router_agent.py              # Clasificador LLM (Tier 2 del enrutador)
 │   ├── mortgage_agent.py            # Agente de hipotecas conversacional  ✅
 │   └── customer_service_agent.py    # Agente de incidencias (RAG)
 ├── tools/
@@ -61,8 +89,10 @@ ContactCenterCustomerService/
 │   ├── app.py                       # Chat multiagente (router → agentes)
 │   ├── rag_explorer.py              # UI para verificar el RAG (sin LLM)  ✅
 │   └── mortgage_chat.py             # Chat conversacional de hipotecas  ✅
-├── config/settings.py               # Modelos, rutas, parámetros del spec
-├── tests/                           # Pruebas unitarias (47, deterministas)  ✅
+├── config/
+│   ├── settings.py                  # Modelos, rutas, parámetros del spec y del enrutador
+│   └── intents.py                   # Registro de intenciones (keywords + ejemplos)
+├── tests/                           # Pruebas unitarias (54, deterministas)  ✅
 ├── main.py                          # CLI conversacional
 └── smoke_test.py                    # Verificación del entorno (Groq, embeddings, CrewAI)
 ```
@@ -75,7 +105,7 @@ ContactCenterCustomerService/
 |---|---|
 | Orquestación de agentes | CrewAI |
 | LLM (dev) | Groq · `llama-3.3-70b-versatile` |
-| Embeddings | `sentence-transformers` · `all-MiniLM-L6-v2` (384 dim) |
+| Embeddings | `sentence-transformers` · `paraphrase-multilingual-MiniLM-L12-v2` (384 dim, ES/EN) |
 | Vector store | FAISS (local, CPU) |
 | Framework RAG | LangChain |
 | Interfaz | Streamlit |
@@ -120,23 +150,22 @@ pip install -r requirements.txt
 ## 📊 Estado del proyecto
 
 ### ✅ Hecho y verificado
+- **Enrutador por niveles** (`agents/router.py`): cascada Tier 0 (reglas) → Tier 1 (semántico) → Tier 2 (LLM) con gating por confianza, sesión *sticky*, aclaración y escalado a humano. Verificado en vivo y con tests offline.
 - **Agente de Hipotecas — flujo de asesoría completo** (`agente_hipotecas_system_prompt.md`):
   - Núcleo determinista (`mortgage_core.py`): LTV, TIN final (base − bonificaciones + ajuste LTV, suelo 1,20%), cuota, ratio de esfuerzo `(cuota+deudas)/ingresos`, estabilidad laboral, historial, test de estrés, *rating* A/B/C/D con **regla de oro**, y rentabilidad.
   - Motor de asesoría Fase 1→3 (`advisory.py`): árbol de decisión, **motor de recomendaciones** (Modificar/Contratar/Eliminar), **escalado a gestor humano** (§7) y mensaje al cliente **§8-safe** (no revela rating/fórmulas).
   - Agente conversacional multi-turno que recoge datos y llama a `EvaluarHipotecaTool` (los cálculos y la decisión los hace el código, no el LLM; `temperature=0`).
 - **Pipeline RAG completo** (Atención al Cliente): ingesta → índice FAISS → búsqueda con relevancia coseno `[0,1]`. Dataset actual: `banking_knowledge_base_1000.csv` (989 Q&A en 10 secciones).
 - **`RAGSearchTool`** con embeddings centralizados (`tools/embeddings.py`) para no divergir entre indexado y consulta.
-- **UIs Streamlit**: `rag_explorer.py` (verifica el RAG sin LLM) y `mortgage_chat.py` (chat de hipotecas), ambas booteadas con `AppTest`.
-- **47 tests** deterministas (`pytest`) sobre el núcleo y el motor de asesoría; flujo del agente verificado en vivo contra Groq.
+- **UIs Streamlit**: `app.py` (chat multiagente con enrutador + sesión sticky y chip de nivel), `rag_explorer.py` (verifica el RAG sin LLM) y `mortgage_chat.py` (chat de hipotecas); booteadas con `AppTest`.
+- **54 tests** deterministas (`pytest`) sobre el núcleo, el motor de asesoría y el enrutador; flujos verificados en vivo contra Groq.
 
 ### 🚧 Parcial / sin verificar end-to-end
-- **Agente Enrutador** (`router_agent.py`): lógica de clasificación escrita, **falta validar con LLM en vivo**.
 - **Agente de Atención al Cliente** (`customer_service_agent.py`): cableado al RAG; falta prueba end-to-end completa (router → RAG → respuesta).
-- **`ui/app.py`** (chat multiagente unificado): andamiaje listo; el multi-turno de hipotecas aún no está integrado ahí (vive en `mortgage_chat.py`).
 
 ### 📋 Pendiente (TODO)
 - [ ] Migrar el LLM de Groq a un **modelo open-source local** (Llama 3.1 8B / Qwen 2.5 7B) → despliegue *on-premise*.
-- [ ] Integrar el flujo conversacional de hipotecas en `ui/app.py` y validar el enrutador en vivo.
+- [ ] Observabilidad del enrutador: logging de decisiones, evaluación contra set etiquetado y minería de errores de enrutado.
 - [ ] `credit_rating.py` queda como **legado** (el rating oficial vive en `mortgage_core`); decidir si retirarlo.
 - [ ] (Opcional) Integración con n8n / Flowise (`start_n8n.bat`, `start_flowise.bat`).
 
@@ -144,6 +173,7 @@ pip install -r requirements.txt
 
 ## 📝 Notas
 
-- **Dataset RAG:** `banking_knowledge_base_1000.csv` (`Section, Question, Answer`, ~1000 filas, UTF-8) sustituye al antiguo `Dataset_Banking_chatbot.csv`. Está en **inglés**; los agentes responden en **español** (el LLM traduce).
+- **Dataset RAG:** `banking_knowledge_base_1000.csv` (`Section, Question, Answer`, ~1000 filas, UTF-8) sustituye al antiguo `Dataset_Banking_chatbot.csv`. Está en **inglés**; gracias al modelo de embeddings multilingüe, una consulta en **español** recupera correctamente de la base en inglés, y el LLM responde en español.
+- **Embeddings multilingües:** si cambias el modelo de embeddings, **reconstruye el índice** (`scripts/build_index.py`) — el espacio vectorial cambia aunque la dimensión siga siendo 384.
 - **Calibración de tipos (hipotecas):** los tipos del spec son de una época de Euríbor bajo. En `settings.py` se usa `EURIBOR_ACTUAL = 1.20` para que la capa de rentabilidad (§5) sea coherente; cámbialo junto con los `TIN_BASE_*` si quieres un entorno de mercado distinto.
 - `.env`, `.venv/`, cachés y la config local de herramientas están excluidos vía `.gitignore`.
