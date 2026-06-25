@@ -1,6 +1,3 @@
-<!-- La siguiente cabecera YAML la usa Hugging Face Spaces para desplegar la demo
-     (sdk + app_file). No la borres si vas a publicar en HF; en GitHub es inofensiva.
-     Guía de despliegue: DEPLOY_HF.md -->
 ---
 title: Contact Center IA Multiagente
 emoji: 🏦
@@ -12,6 +9,9 @@ app_file: ui/app.py
 pinned: false
 short_description: Contact center bancario multiagente por voz (enrutador + RAG + hipotecas)
 ---
+
+<!-- La cabecera YAML de arriba la usa Hugging Face Spaces (sdk + app_file: ui/app.py).
+     Debe ir al principio del archivo. En GitHub es inofensiva. Guía: DEPLOY_HF.md -->
 
 # 🤖 AI Mavericks | Reto 01: Contact Center Multiagente
 
