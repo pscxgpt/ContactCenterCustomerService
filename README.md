@@ -7,7 +7,7 @@ sdk: streamlit
 sdk_version: 1.58.0
 app_file: ui/app.py
 pinned: false
-short_description: Contact center bancario multiagente por voz (enrutador + RAG + hipotecas)
+short_description: Contact center bancario multiagente por voz
 ---
 
 <!-- La cabecera YAML de arriba la usa Hugging Face Spaces (sdk + app_file: ui/app.py).
