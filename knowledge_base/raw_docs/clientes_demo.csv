@@ -1,0 +1,11 @@
+dni,nombre,telefono,ingresos_netos,contrato,antiguedad_anios,deudas_mensuales,nomina,nomina_importe_mensual,seguro_hogar,seguro_vida,plan_pensiones,plan_aportacion_anual,impagos_activos,autonomo_estable,cliente_desde
+12345678Z,Laura Gómez Ruiz,+34 600 111 222,2600,indefinido,6,0,si,2600,si,no,no,0,no,si,2016
+87654321X,Carlos Méndez Ortega,+34 600 222 333,1900,indefinido,3,250,si,1900,no,no,no,0,no,si,2019
+11223344A,Marta Sánchez Vidal,+34 600 333 444,1500,temporal,1.5,180,no,0,no,no,no,0,no,si,2021
+55667788B,Javier Torres León,+34 600 444 555,3200,autonomo,4,0,si,3200,si,si,si,1200,no,si,2015
+99887766C,Ana Belén Navarro,+34 600 555 666,2400,funcionario,8,0,si,2400,si,no,no,0,no,si,2014
+44556677D,Diego Romero Pascual,+34 600 666 777,1700,indefinido,2,400,si,1700,no,no,no,0,si,si,2022
+33445566E,Lucía Fernández Gil,+34 600 777 888,2100,indefinido,5,0,si,2100,no,no,si,800,no,si,2017
+22334455F,Pablo Castro Díaz,+34 600 888 999,2800,indefinido,7,150,si,2800,si,si,no,0,no,si,2013
+66778899G,Elena Ramírez Soto,+34 600 999 000,1300,temporal,0.8,0,no,0,no,no,no,0,no,si,2023
+77889900H,Sergio Ibáñez Moreno,+34 601 111 222,3500,autonomo,6,300,si,3500,si,no,si,1000,no,si,2012

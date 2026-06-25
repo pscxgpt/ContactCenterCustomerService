@@ -36,6 +36,15 @@ el flujo es el mismo.
 
 🗣️ **Mensaje:** "Los números **no los inventa el LLM** — los calcula un motor determinista en Python. El LLM solo conversa y recoge datos. Cero alucinaciones en cifras, y cumple normativa: **nunca revela el rating interno ni promete una aprobación**."
 
+### Escena A2 — Cliente EXISTENTE (lookup en el dataset) 💡
+🎙️ **Di:** *"Hola, ya soy cliente del banco, mi DNI es 12345678Z. Quiero una hipoteca fija de 200.000 euros para un piso de 250.000, a 30 años."*
+
+✅ **Esperado:** el agente **localiza a Laura** en el sistema, confirma su perfil (nómina, seguro de hogar, ingresos, contrato) **sin volver a preguntarlo**, y evalúa al momento → **TIN ≈ 2,35 %** y cuota ≈ **775 €** (más bajo que el cliente nuevo: 2,75 %, 816 €).
+
+🗣️ **Mensaje:** "Si ya eres cliente, no te pedimos lo que el banco ya sabe: con tu DNI recuperamos ingresos, contrato y productos del sistema. Sus **vinculaciones (nómina, seguro) bajan el tipo automáticamente** — de 2,75 % a 2,35 %. Y esos datos financieros **se leen directamente del sistema, no pasan por el LLM**: más rápido, más realista y sin riesgo de error."
+
+> Otros DNIs de prueba en `clientes_demo.csv`: `55667788B` (autónomo, totalmente vinculado), `44556677D` (con impagos → caso a derivar), `66778899G` (temporal, ingresos bajos).
+
 ### Escena B — Incidencia por voz (RAG)
 🎙️ **Di:** *"Me han robado la tarjeta, ¿qué hago?"*
 
@@ -89,9 +98,13 @@ el flujo es el mismo.
 ## 5. Frases listas (copia/léelas en voz alta)
 
 ```
-Hipoteca:          Quiero una hipoteca fija de 200.000 euros para un piso de
+Hipoteca (nuevo):  Quiero una hipoteca fija de 200.000 euros para un piso de
                    250.000, a 30 años. Gano 3.000 netos al mes, contrato
                    indefinido desde hace 5 años y no tengo deudas.
+
+Hipoteca (cliente): Hola, ya soy cliente del banco, mi DNI es 12345678Z.
+                   Quiero una hipoteca fija de 200.000 euros para un piso de
+                   250.000, a 30 años.
 
 Incidencia:        Me han robado la tarjeta, ¿qué hago?
 

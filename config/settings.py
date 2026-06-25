@@ -28,6 +28,11 @@ RAW_DOCS_PATH = "knowledge_base/raw_docs"
 # Source FAQ dataset (Section,Question,Answer CSV)
 FAQ_CSV_PATH = os.path.join(RAW_DOCS_PATH, "banking_knowledge_base_1000.csv")
 
+# Synthetic existing-clients dataset (for the mortgage agent's client lookup).
+# Lets a caller who is already a client be pre-filled from the bank's records
+# instead of being asked for income/contract/debts/products.
+CLIENTES_CSV = os.path.join(RAW_DOCS_PATH, "clientes_demo.csv")
+
 # Retrieval
 RETRIEVAL_K = 3
 # Deterministic handoff gate for the incident agent: if the best KB hit scores
