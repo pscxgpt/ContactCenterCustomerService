@@ -11,26 +11,41 @@ short_description: Contact center bancario multiagente por voz
 ---
 
 <!-- La cabecera YAML de arriba la usa Hugging Face Spaces (sdk + app_file: ui/app.py).
-     Debe ir al principio del archivo. En GitHub es inofensiva. Guía: DEPLOY_HF.md -->
+     Debe ir al principio del archivo. En GitHub es inofensiva. -->
 
-# 🤖 AI Mavericks | Reto 01: Contact Center Multiagente
+# AI Mavericks | Reto 01: Contact Center Multiagente
 
 Plataforma inteligente para un *Contact Center* bancario de banca de particulares. Transforma una línea única tradicional en un sistema **multiagente** que clasifica la intención del cliente y la deriva al agente especializado adecuado (Hipotecas o Atención al Cliente).
 
 > Reto 01 de **AI Mavericks (Accenture Barcelona)**.
 
+![Enrutador por niveles](docs/router.gif)
+
+*Recorrido por el enrutador. Umbrales, nombres de modelo y valores de confianza leídos de
+[`config/settings.py`](config/settings.py) y [`agents/router.py`](agents/router.py); no es una
+grabación de la aplicación.*
+
+**In English.** A retail-banking contact centre rebuilt as a multi-agent system. A tiered router
+classifies every caller turn and hands it to a specialist — mortgages or customer service. The
+idea worth stealing is that escalation is gated by confidence rather than used by default:
+keyword rules settle the obvious turns at zero cost, a local embedding classifier takes the
+rest, and the LLM arbitrates only what is genuinely ambiguous. Figures a customer acts on come
+from deterministic Python, never from the model, and the retrieval layer escalates to a human
+instead of guessing. Built for Reto 01, AI Mavericks (Accenture Barcelona). The rest of this
+README is in Spanish, like the product.
+
 ---
 
-## 💡 Filosofía: "Mind + Tools" + Open-Source
+## Filosofía: "Mind + Tools" + Open-Source
 
 1. **Cerebro + Herramientas (Mind + Tools):** el LLM **no** es la base de conocimiento ni una calculadora. Actúa solo como **motor de razonamiento y enrutamiento**: entiende la intención, extrae entidades y delega la ejecución en **herramientas deterministas en Python** (cálculos exactos) o en **búsqueda semántica local** (RAG). Esto elimina alucinaciones en cifras críticas.
 2. **Modelos Open-Source:** diseñado para ejecutarse con modelos compactos (Llama 3.1 8B, Qwen 2.5 7B) desplegables *on-premise* / nube privada → **privacidad total de datos** y **OpEx mínimo**.
 
-> ⚠️ **Nota de estado:** para la *demo*, los componentes en la nube se eligen por velocidad y fiabilidad en directo, pero todos tienen un **reemplazo local de un solo punto de cambio** (la tesis open-source): LLM → **Groq** (`llama-3.3-70b-versatile`) ⇒ Llama 3.1 8B / Qwen 2.5 7B; STT → **Groq Whisper** ⇒ `faster-whisper`; TTS → **edge-tts** ⇒ Piper. La lógica sensible (cálculos, decisiones de riesgo, RAG) ya corre **100 % local**. La migración a modelos locales es una tarea pendiente (ver [Roadmap](#-estado-del-proyecto)).
+> **Nota de estado:** para la *demo*, los componentes en la nube se eligen por velocidad y fiabilidad en directo, pero todos tienen un **reemplazo local de un solo punto de cambio** (la tesis open-source): LLM → **Groq** (`llama-3.3-70b-versatile`) ⇒ Llama 3.1 8B / Qwen 2.5 7B; STT → **Groq Whisper** ⇒ `faster-whisper`; TTS → **edge-tts** ⇒ Piper. La lógica sensible (cálculos, decisiones de riesgo, RAG) ya corre **100 % local**. La migración a modelos locales es una tarea pendiente (ver [Roadmap](#estado-del-proyecto)).
 
 ---
 
-## 🏗️ Arquitectura
+## Arquitectura
 
 ```text
 [ Cliente ] 📞  ──habla──►  🎙️ STT (Groq Whisper)  ──┐
@@ -59,7 +74,7 @@ Plataforma inteligente para un *Contact Center* bancario de banca de particulare
 
 ---
 
-## 🧭 Enrutador por niveles (cascada)
+## Enrutador por niveles (cascada)
 
 El enrutador no manda **todo** al LLM: **escala por confianza**, de modo que la mayoría del tráfico se resuelve local y barato, y el LLM solo arbitra los casos ambiguos. Esta es la palanca de **coste/latencia/privacidad** que sostiene la tesis "Mind + Tools / open-source".
 
@@ -77,11 +92,11 @@ Cada decisión devuelve un `RouteDecision` estructurado (`route_to`, `tier`, `co
 - **Escala por configuración:** añadir una intención = añadir una entrada en [`config/intents.py`](config/intents.py) (sin reentrenar ni reescribir prompts).
 - **Camino de producción:** clasificador pequeño *fine-tuned* + observabilidad (logging de cada decisión, evaluación contra un set etiquetado, minería de errores de enrutado), servido con un modelo local (vLLM/TGI) y *session store* (Redis) para workers sin estado.
 
-> 🌐 El enrutador (y el RAG) usan un **modelo de embeddings multilingüe** (`paraphrase-multilingual-MiniLM-L12-v2`, 384-dim). En español, las consultas dentro de alcance puntúan ~0.55-0.90 y las de fuera ~0.1-0.3, así que Tier 1 separa con fiabilidad y solo lo dudoso escala al LLM. Además habilita recuperación RAG **consulta en español → base de conocimiento en inglés**.
+> El enrutador (y el RAG) usan un **modelo de embeddings multilingüe** (`paraphrase-multilingual-MiniLM-L12-v2`, 384-dim). En español, las consultas dentro de alcance puntúan ~0.55-0.90 y las de fuera ~0.1-0.3, así que Tier 1 separa con fiabilidad y solo lo dudoso escala al LLM. Además habilita recuperación RAG **consulta en español → base de conocimiento en inglés**.
 
 ---
 
-## 🎙️ Voz (canal de contact center)
+## Voz (canal de contact center)
 
 El sistema es **conversacional por voz**: el cliente habla, el agente responde con voz, igual que en una llamada real — pero toda la inteligencia es la misma que en texto. La voz es una **capa fina e intercambiable** alrededor de los agentes ([`tools/voice.py`](tools/voice.py)); el enrutador y los agentes no saben cómo entra ni sale el audio.
 
@@ -99,7 +114,7 @@ El sistema es **conversacional por voz**: el cliente habla, el agente responde c
 
 ---
 
-## 📁 Estructura del proyecto
+## Estructura del proyecto
 
 ```
 ContactCenterCustomerService/
@@ -145,13 +160,13 @@ ContactCenterCustomerService/
 - **Agentes:** [router](agents/router.py) · [hipotecas](agents/mortgage_agent.py) · [atención al cliente](agents/customer_service_agent.py)
 - **Lógica determinista:** [motor de asesoría](tools/financial_calculator/advisory.py) · [núcleo de cálculo](tools/financial_calculator/mortgage_core.py) · [lookup de clientes](tools/financial_calculator/client_lookup.py)
 - **Config:** [`settings.py`](config/settings.py) · [`intents.py`](config/intents.py)
-- **Docs:** [guion de demo](DEMO_RUNBOOK.md) · [despliegue en HF Spaces](DEPLOY_HF.md) · [spec de hipotecas](agente_hipotecas_system_prompt.md)
+- **Docs:** [guion de demo](DEMO_RUNBOOK.md) · [spec de hipotecas](agente_hipotecas_system_prompt.md)
 
-> 🎬 **Para la defensa en directo**, sigue [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md): checklist previo, escenas guionizadas (hipoteca / cliente existente / incidencia / handoff / fuera de alcance), mensajes clave y plan B. Todas las frases están verificadas contra el sistema actual.
+> **Para la defensa en directo**, sigue [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md): checklist previo, escenas guionizadas (hipoteca / cliente existente / incidencia / handoff / fuera de alcance), mensajes clave y plan B. Todas las frases están verificadas contra el sistema actual.
 
 ---
 
-## 🛠️ Stack técnico
+## Stack técnico
 
 | Capa | Tecnología |
 |---|---|
@@ -166,7 +181,13 @@ ContactCenterCustomerService/
 
 ---
 
-## 🚀 Puesta en marcha
+## Puesta en marcha
+
+> **Sobre la demo pública.** No hay un despliegue mantenido. El Space de Hugging Face
+> funcionaba con una clave gratuita de Groq que caduca y hay que renovar a mano, así que da por
+> hecho que no está operativo. Para verlo funcionando, clona el repositorio y usa tu propia
+> `GROQ_API_KEY` — gratuita en [console.groq.com](https://console.groq.com) — siguiendo los
+> pasos de abajo.
 
 ```bash
 # 1. Entorno virtual + dependencias
@@ -206,9 +227,9 @@ pip install -r requirements.txt
 
 ---
 
-## 📊 Estado del proyecto
+## Estado del proyecto
 
-### ✅ Hecho y verificado
+### Hecho y verificado
 - **Canal de voz** ([`tools/voice.py`](tools/voice.py), [`ui/app.py`](ui/app.py)): conversación por voz extremo a extremo — 🎙️ grabar → STT (Groq Whisper) → enrutador → agente → TTS (edge-tts) → 🔊, con *toggle* de voz y entrada también por texto. Round-trip TTS→STT verificado en vivo ([`scripts/voice_smoke.py`](scripts/voice_smoke.py)).
 - **Enrutador por niveles** ([`agents/router.py`](agents/router.py)): cascada Tier 0 (reglas) → Tier 1 (semántico) → Tier 2 (LLM) con gating por confianza, sesión *sticky*, aclaración y escalado a humano. Verificado en vivo y con tests offline.
 - **Agente de Hipotecas — flujo de asesoría completo** ([`agente_hipotecas_system_prompt.md`](agente_hipotecas_system_prompt.md)):
@@ -222,7 +243,7 @@ pip install -r requirements.txt
 - **UIs Streamlit**: [`app.py`](ui/app.py) (chat multiagente por **voz + texto** con enrutador, sesión sticky y chip de nivel), [`rag_explorer.py`](ui/rag_explorer.py) (verifica el RAG sin LLM) y [`mortgage_chat.py`](ui/mortgage_chat.py) (chat de hipotecas); booteadas con `AppTest`.
 - **64 tests** deterministas ([`tests/`](tests/)) sobre el núcleo, el motor de asesoría, el enrutador, el *gate* de incidencias y el lookup de clientes; flujos verificados en vivo contra Groq.
 
-### 📋 Pendiente (TODO)
+### Pendiente (TODO)
 - [ ] Migrar los componentes en la nube a **equivalentes locales open-source** (LLM → Llama 3.1 8B / Qwen 2.5 7B; STT → `faster-whisper`; TTS → Piper) → despliegue *on-premise*.
 - [ ] Observabilidad del enrutador: logging de decisiones, evaluación contra set etiquetado y minería de errores de enrutado.
 - [ ] [`credit_rating.py`](tools/financial_calculator/credit_rating.py) queda como **legado** (el rating oficial vive en [`mortgage_core.py`](tools/financial_calculator/mortgage_core.py)); decidir si retirarlo.
@@ -230,7 +251,7 @@ pip install -r requirements.txt
 
 ---
 
-## 📝 Notas
+## Notas
 
 - **Dataset RAG:** [`banking_knowledge_base_1000.csv`](knowledge_base/raw_docs/banking_knowledge_base_1000.csv) (`Section, Question, Answer`, ~1000 filas, UTF-8) sustituye al antiguo `Dataset_Banking_chatbot.csv`. Está en **inglés**; gracias al modelo de embeddings multilingüe, una consulta en **español** recupera correctamente de la base en inglés, y el LLM responde en español.
 - **Dataset de clientes:** [`clientes_demo.csv`](knowledge_base/raw_docs/clientes_demo.csv) (10 clientes sintéticos, clave por DNI y teléfono) alimenta el [lookup de cliente existente](tools/financial_calculator/client_lookup.py) del agente de hipotecas. DNIs útiles para la demo: `12345678Z` (perfil sólido y vinculado), `55667788B` (autónomo), `44556677D` (con impagos), `66778899G` (temporal, ingresos bajos).

@@ -1,0 +1,12 @@
+# The repository stores text with LF. Without this, Windows checkouts rewrite
+# every file to CRLF and 15 files sit permanently "modified" with no real edits.
+* text=auto eol=lf
+
+# Never touched by EOL conversion
+*.png    binary
+*.gif    binary
+*.mp4    binary
+*.pdf    binary
+*.pkl    binary
+*.faiss  binary
+*.pt     binary
